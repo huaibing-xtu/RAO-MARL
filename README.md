@@ -79,8 +79,7 @@ MAPDN/
 ├── environments/                   # MAPDN simulation environment
 ├── args/                           # YAML configuration files
 ├── environment.yml                 # Conda environment (Linux)
-├── environment_win.yml             # Conda environment (Windows)
-└── CLAUDE.md                       # Project development guidelines
+└── environment_win.yml             # Conda environment (Windows)
 ```
 
 ## Installation
@@ -103,7 +102,86 @@ conda env create -f environment_win.yml
 conda activate mapdn
 ```
 
+## Dataset
+
+The simulation data for all three test cases (case33, case141, case322) is hosted on Hugging Face Datasets:
+
+[https://huggingface.co/datasets/hsvgbkhgbv/Multi-Agent-Power-Distribution-Networks](https://huggingface.co/datasets/hsvgbkhgbv/Multi-Agent-Power-Distribution-Networks)
+
+### Download
+
+```bash
+# Download the dataset archive (~9.3 GB)
+wget https://huggingface.co/datasets/hsvgbkhgbv/Multi-Agent-Power-Distribution-Networks/resolve/main/voltage_control_data.zip
+
+# Extract into the MAPDN project
+unzip voltage_control_data.zip -d environments/var_voltage_control/
+```
+
+After extraction, the directory structure should be:
+
+```
+environments/var_voltage_control/data/
+├── case33_3min_final/
+│   ├── load_active.csv          # Active power load profiles (336 MB)
+│   ├── load_reactive.csv        # Reactive power load profiles (340 MB)
+│   ├── pv_active.csv            # PV generation profiles (52 MB)
+│   └── model.p                  # Grid topology model (39 KB)
+├── case141_3min_final/
+│   ├── load_active.csv          # Active power load profiles (849 MB)
+│   ├── load_reactive.csv        # Reactive power load profiles (858 MB)
+│   ├── pv_active.csv            # PV generation profiles (159 MB)
+│   └── model.p                  # Grid topology model (53 KB)
+└── case322_3min_final/
+    ├── load_active.csv          # Active power load profiles (3.2 GB)
+    ├── load_reactive.csv        # Reactive power load profiles (3.2 GB)
+    ├── pv_active.csv            # PV generation profiles (284 MB)
+    └── model.p                  # Grid topology model (112 KB)
+```
+
+### Data Description
+
+Each CSV file is a time-series matrix where:
+- **Rows** correspond to time steps (3-minute resolution)
+- **Columns** correspond to buses/nodes in the distribution network
+- **load_active**: Active power consumption (MW)
+- **load_reactive**: Reactive power consumption (MVAr)
+- **pv_active**: Photovoltaic active power generation (MW)
+
+The `.p` files are pickled pandapower grid models containing network topology, line parameters, and bus configurations for each test case.
+
+### Usage in Code
+
+The dataset is loaded automatically by the environment during offline replay construction:
+
+```python
+# The environment reads CSV data via pandapower
+# See: environments/var_voltage_control/voltage_control_env.py
+# Data path is configured in: args/env_args/var_voltage_control.yaml
+```
+
+### High-Performance I/O (Recommended for case322)
+
+The case322 dataset contains files exceeding 3 GB. For faster loading on HPC clusters, convert CSVs to Parquet:
+
+```bash
+python -c "
+import pandas as pd
+from pathlib import Path
+data_root = Path('environments/var_voltage_control/data')
+for csv_file in data_root.rglob('*.csv'):
+    pq_file = csv_file.with_suffix('.parquet')
+    df = pd.read_csv(csv_file)
+    df.to_parquet(pq_file)
+    print(f'Converted: {csv_file} -> {pq_file}')
+"
+```
+
 ## Quick Start
+
+### 0. Download simulation data
+
+Download and extract the voltage control dataset before proceeding. See the [Dataset](#dataset) section above for download links and instructions.
 
 ### 1. Build the offline replay dataset
 
@@ -157,6 +235,7 @@ MAPDN V3 extends BCQ (Batch-Constrained Q-learning) to the constrained multi-age
 5. **Candidate Screening**: At deployment, actions are scored as `Q_r_lower - λ * Q_c_upper - margin * budget_violation`
 6. **Offline-Only**: No environment interaction during training — purely data-driven
 
+<!--
 ## Citation
 
 If you use this code in your research, please cite our paper:
@@ -170,6 +249,7 @@ If you use this code in your research, please cite our paper:
   note={under review}
 }
 ```
+-->
 
 ## License
 
